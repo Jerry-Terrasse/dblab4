@@ -10,6 +10,9 @@ Buffer buf;
 
 // Utils
 
+#define RED "\033[31m"
+#define NOCOLOR "\033[0m"
+#define cprintf(fmt, ...) printf(RED fmt NOCOLOR, ##__VA_ARGS__)
 typedef unsigned char* BLK;
 
 bool is_null(unsigned char *p) {
@@ -35,6 +38,12 @@ void writeint(BLK p, int pos, int x) {
     char buf[4];
     sprintf(buf, "%03d", x);
     memcpy(p + pos * 4, buf, 4);
+}
+void print_title(char *title) {
+    int len = strlen(title) / 1.5;
+    printf("\n%.*s\n", len, "--------------------------------------------------");
+    cprintf("%s\n", title);
+    printf("%.*s\n", len, "--------------------------------------------------");
 }
 
 // Data structures
@@ -231,20 +240,18 @@ void task1_select_cbk(int cnt, int X, int Y)
 }
 void task1()
 {
-    printf("---------------------------\n");
-    printf("基于线性搜索的选择算法 S.C=107:\n");
-    printf("---------------------------\n");
+    print_title("基于线性搜索的选择算法");
     buf.numIO = 0;
 
     vector v;
     vector_init(&v);
     user_data = &v;
     linear_scan(17, 49, task1_select_cbk, true);
-    printf("满足选择条件的元组一共%d个\n", v.size / 2);
+    cprintf("满足选择条件的元组一共%d个\n", v.size / 2);
 
     vector_save_and_free(&v, 100, true);
 
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 void insert_cbk(int cnt, int X, int Y)
@@ -334,9 +341,7 @@ void merge(int b1, int e1, int b2, int e2, int to) {
 
 void task2()
 {
-    printf("---------------------------\n");
-    printf("两阶段多路归并排序算法（TPMMS）\n");
-    printf("---------------------------\n");
+    print_title("两阶段多路归并排序算法");
     buf.numIO = 0;
 
     // sort R
@@ -352,7 +357,7 @@ void task2()
     merge(233, 241, 241, 249, 267);
     merge(251, 267, 267, 283, 317);
 
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 void task3_getmin_cbk(int cnt, int X, int Y)
@@ -397,9 +402,7 @@ void indexed_select(int idx_blk, int end, int target, void (*callback)(int, int,
 }
 void task3()
 {
-    printf("----------------------------\n");
-    printf("基于索引的关系选择算法（S.C=107）\n");
-    printf("----------------------------\n");
+    print_title("基于索引的关系选择算法");
 
     // make index for S
     make_index(317, 349, 350);
@@ -412,9 +415,9 @@ void task3()
     user_data = &result;
     indexed_select(350, 349, target, task1_select_cbk, true);
 
-    printf("满足选择条件的元组一共%d个\n", result.size / 2);
+    cprintf("满足选择条件的元组一共%d个\n", result.size / 2);
     vector_save_and_free(&result, 120, true);
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 void task4_join_cbk(int cnt, int c, int d)
@@ -428,9 +431,7 @@ void task4_join_cbk(int cnt, int c, int d)
 }
 void task4()
 {
-    printf("----------------------------\n");
-    printf("基于排序的连接操作算法（Sort-Merge-Join）\n");
-    printf("----------------------------\n");
+    print_title("基于排序的连接操作算法");
     buf.numIO = 0;
 
     // on R.A = S.C
@@ -487,12 +488,13 @@ void task4()
     
     vector_save_and_free(&out, to, false);
     vector_free(&in1); vector_free(&in2);
-    printf("IO读写一共%d次\n", (int)buf.numIO);
-    printf("连接结果一共%d个\n", cnt);
     printf("连接结果写入磁盘%d-%d\n", 401, to);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("连接结果一共%d个\n", cnt);
 }
 
 void task5_union() {
+    print_title("基于排序的集合并运算");
     int b1 = 301, e1 = 317, b2 = 317, e2 = 349, to = 501;
     vector in1, in2, out;
     vector_init(&in1); vector_init(&in2); vector_init(&out);
@@ -542,10 +544,11 @@ void task5_union() {
 
     vector_save_and_free(&out, to, false);
     vector_free(&in1); vector_free(&in2);
-    printf("并集结果一共%d个\n", tot);
     printf("并集结果写入磁盘%d-%d\n", 501, to);
+    cprintf("并集结果一共%d个\n", tot);
 }
 void task5_inter() {
+    print_title("基于排序的集合交运算");
     int b1 = 301, e1 = 317, b2 = 317, e2 = 349, to = 601;
     vector in1, in2, out;
     vector_init(&in1); vector_init(&in2); vector_init(&out);
@@ -578,10 +581,11 @@ void task5_inter() {
 
     vector_save_and_free(&out, to, false);
     vector_free(&in1); vector_free(&in2);
-    printf("交集结果一共%d个\n", tot);
     printf("交集结果写入磁盘%d-%d\n", 601, to);
+    cprintf("交集结果一共%d个\n", tot);
 }
 void task5_diff() {
+    print_title("基于排序的集合差运算");
     int b1 = 317, e1 = 349, b2 = 301, e2 = 317, to = 701;
     vector in1, in2, out;
     vector_init(&in1); vector_init(&in2); vector_init(&out);
@@ -623,29 +627,26 @@ void task5_diff() {
 
     vector_save_and_free(&out, to, false);
     vector_free(&in1); vector_free(&in2);
-    printf("差集结果一共%d个\n", tot);
     printf("差集结果写入磁盘%d-%d\n", 701, to);
+    cprintf("差集结果一共%d个\n", tot);
 }
 void task5()
 {
-    printf("----------------------------\n");
-    printf("基于排序的集合并交差算法\n");
-    printf("----------------------------\n");
 
     // Union
     buf.numIO = 0;
     task5_union();
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 
     // Intersection
     buf.numIO = 0;
     task5_inter();
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 
     // Difference
     buf.numIO = 0;
     task5_diff();
-    printf("IO读写一共%d次\n", (int)buf.numIO);
+    cprintf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 int main()

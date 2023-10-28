@@ -7,6 +7,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <assert.h>
 #include "extmem.h"
 
 Buffer *initBuffer(size_t bufSize, size_t blkSize, Buffer *buf)
@@ -62,6 +64,7 @@ unsigned char *getNewBlockInBuffer(Buffer *buf)
 
 void freeBlockInBuffer(unsigned char *blk, Buffer *buf)
 {
+    assert(*(blk - 1) == BLOCK_UNAVAILABLE);
     *(blk - 1) = BLOCK_AVAILABLE;
     buf->numFreeBlk++;
 }

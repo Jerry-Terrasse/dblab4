@@ -34,6 +34,7 @@ void writeint(char *p, int pos, int x) {
 
 // Data structures
 
+// 基于缓冲区的Vector
 #define BLK_CAP 14
 typedef struct vector {
     int size, capacity;
@@ -146,7 +147,7 @@ void linear_scan(int begin, int end, void (*callback)(int, int, int), bool verbo
 }
 
 
-// Tasks
+// Application
 
 void print_tuple_cbk(int cnt, int X, int Y)
 {
@@ -290,7 +291,14 @@ void task2()
     merge(201, 209, 209, 217, 301);
 
     // sort S
-    // sort(17, 25, )
+    for(int i=17; i < 49; i+=8) {
+        sort(i, i+8, 200 + i);
+    }
+    merge(217, 225, 225, 233, 251);
+    merge(233, 241, 241, 249, 267);
+    merge(251, 267, 267, 283, 317);
+
+    printf("IO读写一共%d次\n", buf.numIO);
 }
 
 int main()
@@ -308,4 +316,9 @@ int main()
 
     task2();
     display(301, 317);
+    printf("\n");
+    display(317, 349);
+    printf("\n");
+
+    freeBuffer(&buf);
 }

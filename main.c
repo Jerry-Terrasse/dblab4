@@ -104,19 +104,38 @@ void vector_swap(vector *v, int i, int j) {
     int val2 = vector_set(v, j, val1);
     vector_set(v, i, val2);
 }
-void vector_save(vector *v, int disk, bool verbose) {
+// save a vector to disk, also free used blocks
+// this behavior due to the extmem.h interface, `writeBlockToDisk` frees the block
+void vector_save_and_free(vector *v, int disk, bool verbose) {
     assert(disk < 1000);
-    for(int i=0; i < v->size; i+=BLK_CAP) {
-        char *blk = getNewBlockInBuffer(&buf);
-        assert(blk);
-        memset(blk, 0x00, 64);
-        for(int j=0; j < BLK_CAP && i+j < v->size; j++) {
-            writeint(blk, j, vector_get(v, i+j));
-        }
+    char *blk = v->head;
+    while(blk) {
+        char *nxt = *vector_nxt(blk);
+        memset(blk + 7*8, 0x00, 8);
         sprintf(blk + 7*8, "%03d", disk + 1);
         if(verbose) printf("注：结果写入磁盘：%d\n", disk);
-        assert(!writeBlockToDisk(blk, disk, &buf));
-        disk ++;
+        assert(!writeBlockToDisk(blk, disk++, &buf));
+        blk = nxt;
+    }
+}
+// load a vector directly from disk, without any redundant buffer usage
+void vector_load(vector *v, int begin, int end) {
+    vector_free(v);
+    char *blk = readBlockFromDisk(begin, &buf);
+    assert(blk);
+    v->capacity = BLK_CAP;
+    v->size = BLK_CAP;
+    v->head = blk;
+    v->tail = blk;
+    *vector_nxt(v->tail) = NULL;
+    for(int i=begin+1; i < end; i++) {
+        blk = readBlockFromDisk(i, &buf);
+        assert(blk);
+        *vector_nxt(v->tail) = blk;
+        v->tail = blk;
+        *vector_nxt(v->tail) = NULL;
+        v->capacity += BLK_CAP;
+        v->size += BLK_CAP;
     }
 }
 
@@ -179,8 +198,7 @@ void task1()
     linear_scan(17, 49, task1_select_cbk, true);
     printf("满足选择条件的元组一共%d个\n", v.size / 2);
 
-    vector_save(&v, 100, true);
-    vector_free(&v);
+    vector_save_and_free(&v, 100, true);
 
     printf("IO读写一共%d次\n", buf.numIO);
 }
@@ -195,7 +213,7 @@ void sort(int begin, int end, int to)
     vector v;
     vector_init(&v);
     user_data = &v;
-    linear_scan(begin, end, insert_cbk, false);
+    vector_load(&v, begin, end);
 
     int tuple_num = v.size / 2;
     for(int i=0; i < tuple_num; i++) {
@@ -213,8 +231,7 @@ void sort(int begin, int end, int to)
         }
     }
 
-    vector_save(&v, to, false);
-    vector_free(&v);
+    vector_save_and_free(&v, to, false);
 }
 
 bool tuple_cmp(int a1, int b1, int a2, int b2)
@@ -267,8 +284,8 @@ void merge(int b1, int e1, int b2, int e2, int to) {
             p2++;
         }
         if(out.size == out.capacity) {
-            vector_save(&out, to++, false);
-            vector_free(&out); vector_init(&out);
+            vector_save_and_free(&out, to++, false);
+            vector_init(&out);
         }
     }
 

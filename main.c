@@ -10,7 +10,9 @@ Buffer buf;
 
 // Utils
 
-int readint(char *p) {
+typedef unsigned char* BLK;
+
+int readint(unsigned char *p) {
     int res = 0;
     for (int i = 0; p[i] && i < 3; i++) {
         res = res * 10 + p[i] - '0';
@@ -18,15 +20,15 @@ int readint(char *p) {
     assert(p[3] == '\0');
     return res;
 }
-void readtuple(char *p, int *x, int *y) {
+void readtuple(unsigned char *p, int *x, int *y) {
     *x = readint(p);
     *y = readint(p + 4);
 }
 
-int at(char *blk, int i) {
+int at(BLK blk, int i) {
     return readint(blk + i * 4);
 }
-void writeint(char *p, int pos, int x) {
+void writeint(BLK p, int pos, int x) {
     char buf[4];
     sprintf(buf, "%03d", x);
     memcpy(p + pos * 4, buf, 4);
@@ -38,11 +40,11 @@ void writeint(char *p, int pos, int x) {
 #define BLK_CAP 14
 typedef struct vector {
     int size, capacity;
-    char *head, *tail;
+    BLK head, tail;
 } vector;
-char** vector_nxt(char *blk)
+BLK* vector_nxt(BLK blk)
 {
-    return (char**)(blk + 7 * 8);
+    return (void*)(blk + 7 * 8);
 }
 void vector_init(vector *v) {
     v->size = 0;
@@ -53,7 +55,7 @@ void vector_init(vector *v) {
     *vector_nxt(v->head) = NULL;
 }
 void vector_extend(vector *v) {
-    char *blk = getNewBlockInBuffer(&buf);
+    BLK blk = getNewBlockInBuffer(&buf);
     assert(blk);
     *vector_nxt(v->tail) = blk;
     v->tail = blk;
@@ -64,7 +66,7 @@ int vector_get(vector *v, int idx)
 {
     assert(idx < v->size);
     int blkid = idx / BLK_CAP;
-    char *blk = v->head;
+    BLK blk = v->head;
     for (int i = 0; i < blkid; i++) {
         blk = *vector_nxt(blk);
     }
@@ -74,7 +76,7 @@ int vector_set(vector *v, int idx, int x)
 {
     assert(idx < v->size);
     int blkid = idx / BLK_CAP;
-    char *blk = v->head;
+    BLK blk = v->head;
     for (int i = 0; i < blkid; i++) {
         blk = *vector_nxt(blk);
     }
@@ -91,9 +93,9 @@ void vector_push_back(vector *v, int x) {
 }
 void vector_free(vector *v) {
     if(!v->head) return;
-    char *blk = v->head;
+    BLK blk = v->head;
     while (blk) {
-        char *nxt = *vector_nxt(blk);
+        BLK nxt = *vector_nxt(blk);
         freeBlockInBuffer(blk, &buf);
         blk = nxt;
     }
@@ -108,11 +110,11 @@ void vector_swap(vector *v, int i, int j) {
 // this behavior due to the extmem.h interface, `writeBlockToDisk` frees the block
 void vector_save_and_free(vector *v, int disk, bool verbose) {
     assert(disk < 1000);
-    char *blk = v->head;
+    BLK blk = v->head;
     while(blk) {
-        char *nxt = *vector_nxt(blk);
+        BLK nxt = *vector_nxt(blk);
         memset(blk + 7*8, 0x00, 8);
-        sprintf(blk + 7*8, "%03d", disk + 1);
+        sprintf((char*)blk + 7*8, "%03d", disk + 1);
         if(verbose) printf("注：结果写入磁盘：%d\n", disk);
         assert(!writeBlockToDisk(blk, disk++, &buf));
         blk = nxt;
@@ -121,7 +123,7 @@ void vector_save_and_free(vector *v, int disk, bool verbose) {
 // load a vector directly from disk, without any redundant buffer usage
 void vector_load(vector *v, int begin, int end) {
     vector_free(v);
-    char *blk = readBlockFromDisk(begin, &buf);
+    BLK blk = readBlockFromDisk(begin, &buf);
     assert(blk);
     v->capacity = BLK_CAP;
     v->size = BLK_CAP;
@@ -152,7 +154,7 @@ void linear_scan(int begin, int end, void (*callback)(int, int, int), bool verbo
         if(verbose) {
             printf("读入数据库块%d\n", blkid);
         }
-        char *blk = readBlockFromDisk(blkid, &buf);
+        BLK blk = readBlockFromDisk(blkid, &buf);
         assert(blk);
         for (int i = 0; i < 7; i++)
         {
@@ -200,7 +202,7 @@ void task1()
 
     vector_save_and_free(&v, 100, true);
 
-    printf("IO读写一共%d次\n", buf.numIO);
+    printf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 void insert_cbk(int cnt, int X, int Y)
@@ -254,12 +256,12 @@ void merge(int b1, int e1, int b2, int e2, int to) {
 
     while(!(b1 == e1 && p1 * 2 == in1.size) || !(b2 == e2 && p2 * 2 == in2.size)) {
         if(b1 < e1 && p1*2 == in1.size) {
-            task2_load_blk(b1++, b1, &in1);
-            p1 = 0;
+            task2_load_blk(b1, b1+1, &in1);
+            p1 = 0; ++b1;
         }
         if(b2 < e2 && p2*2 == in2.size) {
-            task2_load_blk(b2++, b2, &in2);
-            p2 = 0;
+            task2_load_blk(b2, b2+1, &in2);
+            p2 = 0; ++b2;
         }
 
         if(b1 != e1 || p1 * 2 != in1.size) {
@@ -314,7 +316,7 @@ void task2()
     merge(233, 241, 241, 249, 267);
     merge(251, 267, 267, 283, 317);
 
-    printf("IO读写一共%d次\n", buf.numIO);
+    printf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 int main()

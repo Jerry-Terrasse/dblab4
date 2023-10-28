@@ -223,30 +223,41 @@ bool tuple_cmp(int a1, int b1, int a2, int b2)
     if(a1 > a2) return false;
     return b1 < b2;
 }
-void merge(int b1, int e1, int b2, int e2, int to)
-{
+void task2_load_blk(int b, int e, vector *in) {
+    vector_free(in); vector_init(in);
+    user_data = in;
+    linear_scan(b, b + 1, insert_cbk, false);
+}
+void merge(int b1, int e1, int b2, int e2, int to) {
     vector in1, in2, out;
     vector_init(&in1); vector_init(&in2); vector_init(&out);
 
     int x1, y1, x2, y2;
     int p1 = 0, p2 = 0;
-    while(!(b1==e1 && p1*2 == in1.size) && !(b2==e2 && p2*2 == in2.size)) {
-        if(p1*2 == in1.size) {
-            printf("done: %d\n", b1-1);
-            vector_free(&in1); vector_init(&in1);
-            user_data = &in1; linear_scan(b1, b1+1, insert_cbk, false);
-            b1++; p1=0;
+
+    while(!(b1 == e1 && p1 * 2 == in1.size) || !(b2 == e2 && p2 * 2 == in2.size)) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            task2_load_blk(b1++, b1, &in1);
+            p1 = 0;
         }
-        if(p2*2 == in2.size) {
-            printf("done: %d\n", b2-1);
-            vector_free(&in2); vector_init(&in2);
-            user_data = &in2; linear_scan(b2, b2+1, insert_cbk, false);
-            b2++; p2=0;
+        if(b2 < e2 && p2*2 == in2.size) {
+            task2_load_blk(b2++, b2, &in2);
+            p2 = 0;
         }
-        
-        x1 = vector_get(&in1, p1*2); y1 = vector_get(&in1, p1*2+1);
-        x2 = vector_get(&in2, p2*2); y2 = vector_get(&in2, p2*2+1);
-        if(tuple_cmp(x1, y1, x2, y2)) {
+
+        if(b1 != e1 || p1 * 2 != in1.size) {
+            x1 = vector_get(&in1, p1 * 2); 
+            y1 = vector_get(&in1, p1 * 2 + 1);
+        }
+        if(b2 != e2 || p2 * 2 != in2.size) {
+            x2 = vector_get(&in2, p2 * 2);
+            y2 = vector_get(&in2, p2 * 2 + 1);
+        }
+
+        bool from_in1 = (b2 == e2 && p2*2 == in2.size) || // in2 is empty
+            (!(b1 == e1 && p1*2 == in1.size) && tuple_cmp(x1, y1, x2, y2)); // in1 is not empty, and in1 < in2
+
+        if(from_in1) {
             vector_push_back(&out, x1);
             vector_push_back(&out, y1);
             p1++;
@@ -255,49 +266,12 @@ void merge(int b1, int e1, int b2, int e2, int to)
             vector_push_back(&out, y2);
             p2++;
         }
+        if(out.size == out.capacity) {
+            vector_save(&out, to++, false);
+            vector_free(&out); vector_init(&out);
+        }
+    }
 
-        if(out.size == out.capacity) {
-            vector_save(&out, to++, false);
-            vector_free(&out); vector_init(&out);
-        }
-    }
-    while(!(b1==e1 && p1*2 == in1.size)) {
-        if(p1*2 == in1.size) {
-            printf("done: %d\n", b1-1);
-            vector_free(&in1); vector_init(&in1);
-            user_data = &in1; linear_scan(b1, b1+1, insert_cbk, false);
-            b1++; p1=0;
-        }
-        
-        x1 = vector_get(&in1, p1*2); y1 = vector_get(&in1, p1*2+1);
-        vector_push_back(&out, x1);
-        vector_push_back(&out, y1);
-        p1++;
-
-        if(out.size == out.capacity) {
-            vector_save(&out, to++, false);
-            vector_free(&out); vector_init(&out);
-        }
-    }
-    while(!(b2==e2 && p2*2 == in2.size)) {
-        if(p2*2 == in2.size) {
-            printf("done: %d\n", b2-1);
-            vector_free(&in2); vector_init(&in2);
-            user_data = &in2; linear_scan(b2, b2+1, insert_cbk, false);
-            b2++; p2=0;
-        }
-        
-        x2 = vector_get(&in2, p2*2); y2 = vector_get(&in2, p2*2+1);
-        vector_push_back(&out, x2);
-        vector_push_back(&out, y2);
-        p2++;
-        
-        if(out.size == out.capacity) {
-            vector_save(&out, to++, false);
-            vector_free(&out); vector_init(&out);
-        }
-    }
-    
     vector_free(&in1);
     vector_free(&in2);
     vector_free(&out);

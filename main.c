@@ -116,7 +116,6 @@ void vector_save(vector *v, int disk, bool verbose) {
         sprintf(blk + 7*8, "%03d", disk + 1);
         if(verbose) printf("注：结果写入磁盘：%d\n", disk);
         assert(!writeBlockToDisk(blk, disk, &buf));
-        freeBlockInBuffer(blk, &buf);
         disk ++;
     }
 }

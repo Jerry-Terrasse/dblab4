@@ -12,6 +12,9 @@ Buffer buf;
 
 typedef unsigned char* BLK;
 
+bool is_null(unsigned char *p) {
+    return *p == '\0';
+}
 int readint(unsigned char *p) {
     int res = 0;
     for (int i = 0; p[i] && i < 3; i++) {
@@ -51,15 +54,15 @@ void vector_init(vector *v) {
     v->capacity = BLK_CAP;
     v->head = getNewBlockInBuffer(&buf);
     assert(v->head);
+    memset(v->head, 0x00, 64);
     v->tail = v->head;
-    *vector_nxt(v->head) = NULL;
 }
 void vector_extend(vector *v) {
     BLK blk = getNewBlockInBuffer(&buf);
     assert(blk);
     *vector_nxt(v->tail) = blk;
     v->tail = blk;
-    *vector_nxt(v->tail) = NULL;
+    memset(blk, 0x00, 64);
     v->capacity += BLK_CAP;
 }
 int vector_get(vector *v, int idx)
@@ -99,6 +102,8 @@ void vector_free(vector *v) {
         freeBlockInBuffer(blk, &buf);
         blk = nxt;
     }
+    v->head = v->tail = NULL;
+    v->size = v->capacity = 0;
 }
 void vector_swap(vector *v, int i, int j) {
     if(i == j) return;
@@ -126,7 +131,6 @@ void vector_load(vector *v, int begin, int end) {
     BLK blk = readBlockFromDisk(begin, &buf);
     assert(blk);
     v->capacity = BLK_CAP;
-    v->size = BLK_CAP;
     v->head = blk;
     v->tail = blk;
     *vector_nxt(v->tail) = NULL;
@@ -137,8 +141,22 @@ void vector_load(vector *v, int begin, int end) {
         v->tail = blk;
         *vector_nxt(v->tail) = NULL;
         v->capacity += BLK_CAP;
-        v->size += BLK_CAP;
     }
+    v->size = -1;
+    for(int i=BLK_CAP-1; i>=0; --i) {
+        if(!is_null(v->tail + i*4)) {
+            v->size = v->capacity + i - BLK_CAP + 1;
+            break;
+        }
+    }
+    assert(v->size != -1);
+}
+void vector_print(vector *v) {
+    printf("Vector: size=%d, capacity=%d\n", v->size, v->capacity);
+    for(int i=0; i < v->size; i++) {
+        printf("%d ", vector_get(v, i));
+    }
+    printf("\n");
 }
 
 
@@ -158,6 +176,9 @@ void linear_scan(int begin, int end, void (*callback)(int, int, int), bool verbo
         assert(blk);
         for (int i = 0; i < 7; i++)
         {
+            if(is_null(blk + i * 8)) {
+                break;
+            }
             readtuple(blk + i * 8, &X, &Y);
             callback(++cnt, X, Y);
         }
@@ -319,6 +340,76 @@ void task2()
     printf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
+void task3_getmin_cbk(int cnt, int X, int Y)
+{
+    int *minval = (int*)user_data;
+    *minval = *minval < X ? *minval : X;
+}
+void make_index(int begin, int end, int to) {
+    vector index;
+    vector_init(&index);
+
+    for(int i=begin; i < end; i+=5) {
+        int group = (i - begin) / 5;
+        int minval = 0x7fffffff;
+        user_data = &minval;
+        linear_scan(i, i+5 < end ? i+5 : end, task3_getmin_cbk, false);
+
+        vector_push_back(&index, minval); // min value
+        vector_push_back(&index, i); // block pointer
+    }
+    vector_save_and_free(&index, to, false);
+}
+void task3()
+{
+    printf("----------------------------\n");
+    printf("基于索引的关系选择算法（S.C=107）\n");
+    printf("----------------------------\n");
+
+    // make index for S
+    make_index(317, 349, 350);
+
+    // select from S
+    buf.numIO = 0;
+    int target = 107;
+    vector index;
+    vector_init(&index);
+    vector_load(&index, 350, 351);
+
+    vector result;
+    vector_init(&result);
+    for(int group=0; group < index.size / 2; group++) {
+        int minval = vector_get(&index, group * 2);
+        int maxval = INT32_MAX;
+        if(group + 1 < index.size / 2) {
+            maxval = vector_get(&index, (group + 1) * 2);
+        }
+        if(target < minval || target > maxval) {
+            continue;
+        }
+
+        int blkid = vector_get(&index, group * 2 + 1);
+        user_data = &result;
+        linear_scan(blkid, blkid + 5, task1_select_cbk, true);
+    }
+
+    printf("满足选择条件的元组一共%d个\n", result.size / 2);
+    vector_save_and_free(&result, 120, true);
+    printf("IO读写一共%d次\n", (int)buf.numIO);
+}
+
+void task4()
+{
+    printf("----------------------------\n");
+    printf("基于排序的连接操作算法（Sort-Merge-Join）\n");
+    printf("----------------------------\n");
+    buf.numIO = 0;
+
+    // on R.A = S.C
+    int b1 = 301, e1 = 317, b2 = 317, e2 = 349;
+    int to = 401;
+}
+
 int main()
 {
     initBuffer(520, 64, &buf);
@@ -333,9 +424,13 @@ int main()
     printf("\n");
 
     task2();
-    display(301, 317);
-    printf("\n");
-    display(317, 349);
+    // display(301, 317);
+    // printf("\n");
+    // display(317, 349);
+    // printf("\n");
+
+    task3();
+    display(120, 122);
     printf("\n");
 
     freeBuffer(&buf);

@@ -158,6 +158,13 @@ void vector_print(vector *v) {
     }
     printf("\n");
 }
+void vector_push2_autosave(vector *v, int x1, int x2, int *disk) {
+    vector_push_back(v, x1); vector_push_back(v, x2);
+    if(v->size == v->capacity) {
+        vector_save_and_free(v, (*disk)++, false);
+        vector_init(v);
+    }
+}
 
 
 // Core functions
@@ -197,6 +204,20 @@ void print_tuple_cbk(int cnt, int X, int Y)
 void display(int first_blk, int end_blk)
 {
     linear_scan(first_blk, end_blk, print_tuple_cbk, false);
+}
+void display_quadruple_cbk(int cnt, int X, int Y) {
+    int *info = (int*)user_data;
+    if(info[0]) {
+        printf("%d:\t%d\t%d\t%d\t%d\n", cnt/2, info[1], info[2], X, Y);
+    } else {
+        info[1] = X; info[2] = Y;
+    }
+    info[0] = !info[0];
+}
+void display_quadruple(int begin, int end) {
+    int info[3] = {false, 0, 0};
+    user_data = info;
+    linear_scan(begin, end, display_quadruple_cbk, false);
 }
 
 void task1_select_cbk(int cnt, int X, int Y)
@@ -298,17 +319,11 @@ void merge(int b1, int e1, int b2, int e2, int to) {
             (!(b1 == e1 && p1*2 == in1.size) && tuple_cmp(x1, y1, x2, y2)); // in1 is not empty, and in1 < in2
 
         if(from_in1) {
-            vector_push_back(&out, x1);
-            vector_push_back(&out, y1);
+            vector_push2_autosave(&out, x1, y1, &to);
             p1++;
         } else {
-            vector_push_back(&out, x2);
-            vector_push_back(&out, y2);
+            vector_push2_autosave(&out, x2, y2, &to);
             p2++;
-        }
-        if(out.size == out.capacity) {
-            vector_save_and_free(&out, to++, false);
-            vector_init(&out);
         }
     }
 
@@ -360,6 +375,26 @@ void make_index(int begin, int end, int to) {
     }
     vector_save_and_free(&index, to, false);
 }
+void indexed_select(int idx_blk, int end, int target, void (*callback)(int, int, int), bool verbose) {
+    vector index;
+    vector_init(&index);
+    vector_load(&index, idx_blk, idx_blk + 1);
+
+    for(int group=0; group < index.size/2; group++) {
+        int minval = vector_get(&index, group * 2);
+        int maxval = INT32_MAX;
+        if(group + 1 < index.size / 2) {
+            maxval = vector_get(&index, (group + 1) * 2);
+        }
+        if(target < minval || target > maxval) {
+            continue;
+        }
+        int blkid = vector_get(&index, group * 2 + 1);
+        int endid = blkid+5 < end ? blkid+5 : end;
+        linear_scan(blkid, end, callback, verbose);
+    }
+    vector_free(&index);
+}
 void task3()
 {
     printf("----------------------------\n");
@@ -372,32 +407,25 @@ void task3()
     // select from S
     buf.numIO = 0;
     int target = 107;
-    vector index;
-    vector_init(&index);
-    vector_load(&index, 350, 351);
-
     vector result;
     vector_init(&result);
-    for(int group=0; group < index.size / 2; group++) {
-        int minval = vector_get(&index, group * 2);
-        int maxval = INT32_MAX;
-        if(group + 1 < index.size / 2) {
-            maxval = vector_get(&index, (group + 1) * 2);
-        }
-        if(target < minval || target > maxval) {
-            continue;
-        }
-
-        int blkid = vector_get(&index, group * 2 + 1);
-        user_data = &result;
-        linear_scan(blkid, blkid + 5, task1_select_cbk, true);
-    }
+    user_data = &result;
+    indexed_select(350, 349, target, task1_select_cbk, true);
 
     printf("满足选择条件的元组一共%d个\n", result.size / 2);
     vector_save_and_free(&result, 120, true);
     printf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
+void task4_join_cbk(int cnt, int c, int d)
+{
+    void **info = user_data;
+    vector *out = info[0]; int *to = info[1]; int a = *(int*)info[2]; int b = *(int*)info[3]; int *tot = info[4];
+    if(c != a) return;
+    vector_push2_autosave(out, a, b, to);
+    vector_push2_autosave(out, c, d, to);
+    ++*tot;
+}
 void task4()
 {
     printf("----------------------------\n");
@@ -407,7 +435,217 @@ void task4()
 
     // on R.A = S.C
     int b1 = 301, e1 = 317, b2 = 317, e2 = 349;
-    int to = 401;
+    int to = 401, p1 = 0, p2 = 0, cnt = 0;
+    vector in1, in2, out;
+    vector_init(&in1); vector_init(&in2); vector_init(&out);
+
+    for(;!(b1 == e1 && p1*2 == in1.size); ++p1) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            vector_load(&in1, b1, b1+1);
+            p1 = 0; ++b1;
+        }
+        int a = vector_get(&in1, p1*2), b = vector_get(&in1, p1*2+1);
+
+        for(; !(b2 == e2 && p2*2 == in2.size); p2++) {
+            if(b2 < e2 && p2*2 == in2.size) {
+                vector_load(&in2, b2, b2+1);
+                p2 = 0; ++b2;
+            }
+            if(vector_get(&in2, p2*2) >= a) {
+                break;
+            }
+        }
+        if(b2 == e2 && p2*2 == in2.size) {
+            break;
+        }
+        int c = vector_get(&in2, p2*2), d = vector_get(&in2, p2*2+1);
+        if(c != a) {
+            continue;
+        }
+
+        bool many = true;
+        for(int i=p2+1; i*2 < in2.size; ++i) {
+            if(vector_get(&in2, i*2) != a) {
+                many = false;
+                break;
+            }
+        }
+        if(many) {
+            void* info[5] = {&out, &to, &a, &b, &cnt};
+            user_data = info;
+            indexed_select(350, 349, a, task4_join_cbk, false);
+            continue;
+        }
+
+        for(int i=p2; i*2 < in2.size; ++i, ++cnt) {
+            int c = vector_get(&in2, i*2), d = vector_get(&in2, i*2+1);
+            if(c != a) break;
+            vector_push2_autosave(&out, a, b, &to);
+            vector_push2_autosave(&out, c, d, &to);
+        }
+    }
+    
+    vector_save_and_free(&out, to, false);
+    vector_free(&in1); vector_free(&in2);
+    printf("IO读写一共%d次\n", (int)buf.numIO);
+    printf("连接结果一共%d个\n", cnt);
+    printf("连接结果写入磁盘%d-%d\n", 401, to);
+}
+
+void task5_union() {
+    int b1 = 301, e1 = 317, b2 = 317, e2 = 349, to = 501;
+    vector in1, in2, out;
+    vector_init(&in1); vector_init(&in2); vector_init(&out);
+
+    int x1, y1, x2, y2;
+    int p1 = 0, p2 = 0, tot = 0;
+
+    for(; !(b1 == e1 && p1 * 2 == in1.size) || !(b2 == e2 && p2 * 2 == in2.size); ++tot) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            task2_load_blk(b1, b1+1, &in1);
+            p1 = 0; ++b1;
+        }
+        if(b2 < e2 && p2*2 == in2.size) {
+            task2_load_blk(b2, b2+1, &in2);
+            p2 = 0; ++b2;
+        }
+
+        bool remain1, remain2;
+        if((remain1 = (b1 != e1 || p1 * 2 != in1.size))) {
+            x1 = vector_get(&in1, p1 * 2); 
+            y1 = vector_get(&in1, p1 * 2 + 1);
+        }
+        if((remain2 = (b2 != e2 || p2 * 2 != in2.size))) {
+            x2 = vector_get(&in2, p2 * 2);
+            y2 = vector_get(&in2, p2 * 2 + 1);
+        }
+
+        if(remain1 && remain2) {
+            if(x1 == x2 && y1 == y2) {
+                vector_push2_autosave(&out, x1, y1, &to);
+                p1++; p2++;
+            } else if(tuple_cmp(x1, y1, x2, y2)) {
+                vector_push2_autosave(&out, x1, y1, &to);
+                p1++;
+            } else {
+                vector_push2_autosave(&out, x2, y2, &to);
+                p2++;
+            }
+        } else if(remain1) {
+            vector_push2_autosave(&out, x1, y1, &to);
+            p1++;
+        } else {
+            vector_push2_autosave(&out, x2, y2, &to);
+            p2++;
+        }
+    }
+
+    vector_save_and_free(&out, to, false);
+    vector_free(&in1); vector_free(&in2);
+    printf("并集结果一共%d个\n", tot);
+    printf("并集结果写入磁盘%d-%d\n", 501, to);
+}
+void task5_inter() {
+    int b1 = 301, e1 = 317, b2 = 317, e2 = 349, to = 601;
+    vector in1, in2, out;
+    vector_init(&in1); vector_init(&in2); vector_init(&out);
+
+    int x1, y1, x2, y2;
+    int p1 = 0, p2 = 0, tot = 0;
+
+    for(; !(b1 == e1 && p1 * 2 == in1.size) && !(b2 == e2 && p2 * 2 == in2.size);) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            task2_load_blk(b1, b1+1, &in1);
+            p1 = 0; ++b1;
+        }
+        if(b2 < e2 && p2*2 == in2.size) {
+            task2_load_blk(b2, b2+1, &in2);
+            p2 = 0; ++b2;
+        }
+
+        x1 = vector_get(&in1, p1 * 2); y1 = vector_get(&in1, p1 * 2 + 1);
+        x2 = vector_get(&in2, p2 * 2); y2 = vector_get(&in2, p2 * 2 + 1);
+
+        if(x1 == x2 && y1 == y2) {
+            vector_push2_autosave(&out, x1, y1, &to);
+            p1++; p2++; tot++;
+        } else if(tuple_cmp(x1, y1, x2, y2)) {
+            p1++;
+        } else {
+            p2++;
+        }
+    }
+
+    vector_save_and_free(&out, to, false);
+    vector_free(&in1); vector_free(&in2);
+    printf("交集结果一共%d个\n", tot);
+    printf("交集结果写入磁盘%d-%d\n", 601, to);
+}
+void task5_diff() {
+    int b1 = 317, e1 = 349, b2 = 301, e2 = 317, to = 701;
+    vector in1, in2, out;
+    vector_init(&in1); vector_init(&in2); vector_init(&out);
+
+    int x1, y1, x2, y2;
+    int p1 = 0, p2 = 0, tot = 0;
+
+    for(; !(b1 == e1 && p1 * 2 == in1.size) && !(b2 == e2 && p2 * 2 == in2.size);) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            task2_load_blk(b1, b1+1, &in1);
+            p1 = 0; ++b1;
+        }
+        if(b2 < e2 && p2*2 == in2.size) {
+            task2_load_blk(b2, b2+1, &in2);
+            p2 = 0; ++b2;
+        }
+
+        x1 = vector_get(&in1, p1 * 2); y1 = vector_get(&in1, p1 * 2 + 1);
+        x2 = vector_get(&in2, p2 * 2); y2 = vector_get(&in2, p2 * 2 + 1);
+
+        if(x1 == x2 && y1 == y2) {
+            p1++; p2++;
+        } else if(tuple_cmp(x1, y1, x2, y2)) {
+            vector_push2_autosave(&out, x1, y1, &to);
+            p1++; tot++;
+        } else {
+            p2++;
+        }
+    }
+
+    for(; !(b1 == e1 && p1 * 2 == in1.size); ++p1, ++tot) {
+        if(b1 < e1 && p1*2 == in1.size) {
+            task2_load_blk(b1, b1+1, &in1);
+            p1 = 0; ++b1;
+        }
+        x1 = vector_get(&in1, p1 * 2); y1 = vector_get(&in1, p1 * 2 + 1);
+        vector_push2_autosave(&out, x1, y1, &to);
+    }
+
+    vector_save_and_free(&out, to, false);
+    vector_free(&in1); vector_free(&in2);
+    printf("差集结果一共%d个\n", tot);
+    printf("差集结果写入磁盘%d-%d\n", 701, to);
+}
+void task5()
+{
+    printf("----------------------------\n");
+    printf("基于排序的集合并交差算法\n");
+    printf("----------------------------\n");
+
+    // Union
+    buf.numIO = 0;
+    task5_union();
+    printf("IO读写一共%d次\n", (int)buf.numIO);
+
+    // Intersection
+    buf.numIO = 0;
+    task5_inter();
+    printf("IO读写一共%d次\n", (int)buf.numIO);
+
+    // Difference
+    buf.numIO = 0;
+    task5_diff();
+    printf("IO读写一共%d次\n", (int)buf.numIO);
 }
 
 int main()
@@ -420,8 +658,8 @@ int main()
     // display(17, 49);
 
     task1();
-    display(100, 102);
-    printf("\n");
+    // display(100, 102);
+    // printf("\n");
 
     task2();
     // display(301, 317);
@@ -430,8 +668,21 @@ int main()
     // printf("\n");
 
     task3();
-    display(120, 122);
-    printf("\n");
+    // display(120, 122);
+    // printf("\n");
+
+    task4();
+    // printf("\nidx\tA\tB\tC\tD\n");
+    // display_quadruple(401, 471);
+
+    task5();
+    // printf("\nUnion:\n");
+    // display(501, 548);
+    // printf("\nIntersection:\n");
+    // display(601, 603);
+    // printf("\n");
+    // printf("\nDifference:\n");
+    // display(701, 732);
 
     freeBuffer(&buf);
 }

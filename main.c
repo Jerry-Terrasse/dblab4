@@ -396,7 +396,7 @@ void indexed_select(int idx_blk, int end, int target, void (*callback)(int, int,
         }
         int blkid = vector_get(&index, group * 2 + 1);
         int endid = blkid+5 < end ? blkid+5 : end;
-        linear_scan(blkid, end, callback, verbose);
+        linear_scan(blkid, endid, callback, verbose);
     }
     vector_free(&index);
 }
